@@ -24,6 +24,13 @@ function parseInputs {
     exit 1
   fi
 
+  if [ "${INPUT_TFSEC_ACTIONS_VERSION}" != "" ]; then
+      tfsecVersion=${INPUT_TFSEC_ACTIONS_VERSION}
+  else
+    echo "Input tfsec_version cannot be empty"
+    exit 1
+  fi
+
   if [ "${INPUT_TG_ACTIONS_VERSION}" != "" ]; then
     tgVersion=${INPUT_TG_ACTIONS_VERSION}
   else
@@ -85,6 +92,46 @@ EOF
   fi
 }
 
+function installTfsec {
+  if [[ "${tfsecVersion}" != "" ]]; then
+  if [[ "${tfsecVersion}" == "latest" ]]; then
+    echo "Checking the latest version of TfSec"
+    latestURL=$(curl -Ls -o /dev/null -w %{url_effective} https://github.com/aquasecurity/tfsec/releases/latest)
+    echo ${latestURL}
+    tfsecVersion=${latestURL##*/}
+
+    if [[ -z "${tfsecVersion}" ]]; then
+      echo "Failed to fetch the latest version"
+      exit 1
+    fi
+  fi
+
+  url="https://github.com/aquasecurity/tfsec/releases/download/${tfsecVersion}/tfsec-linux-amd64"
+
+  echo "${url}"
+  echo "Downloading TfSec ${tfsecVersion}"
+
+  curl -s -S -L -o /tmp/tfsec ${url}
+  if [ "${?}" -ne 0 ]; then
+    echo "Failed to download TfSec ${tfsecVersion}"
+    exit 1
+  fi
+
+  echo "Successfully downloaded TfSec ${tfsecVersion}"
+
+  echo "Moving Tfsec ${tfsecVersion} to PATH"
+  chmod +x /tmp/tfsec
+  mv /tmp/tfsec /usr/local/bin/tfsec
+  if [ "${?}" -ne 0 ]; then
+    echo "Failed to move TfSec ${tfsecVersion}"
+    exit 1
+  fi
+  echo "Successfully moved TfSec ${tfsecVersion}"
+gr  else
+      echo "TfSec not configured not installing"
+  fi
+}
+
 function installTerraform {
   if [[ "${tfVersion}" == "latest" ]]; then
     echo "Checking the latest version of Terraform"
@@ -139,7 +186,7 @@ function installTerragrunt {
 
   echo "Moving Terragrunt ${tgVersion} to PATH"
   chmod +x /tmp/terragrunt
-  mv /tmp/terragrunt /usr/local/bin/terragrunt 
+  mv /tmp/terragrunt /usr/local/bin/terragrunt
   if [ "${?}" -ne 0 ]; then
     echo "Failed to move Terragrunt ${tgVersion}"
     exit 1
@@ -162,6 +209,7 @@ function main {
 
   parseInputs
   configureCLICredentials
+  installTfsec
   installTerraform
   cd ${GITHUB_WORKSPACE}/${tfWorkingDir}
 
